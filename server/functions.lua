@@ -13,57 +13,33 @@ function QBCore.Functions.GetCoords(entity)
     return vector4(coords.x, coords.y, coords.z, heading)
 end
 
-function QBCore.Functions.GetIdentifier(source, idtype)
-    local identifiers = GetPlayerIdentifiers(source)
-    for _, identifier in pairs(identifiers) do
-        if string.find(identifier, idtype) then
-            return identifier
-        end
-    end
-    return nil
-end
+QBCore.Functions.GetIdentifier = ESX.GetPlayerIdentifier
 
 function QBCore.Functions.GetSource(identifier)
-    for src, _ in pairs(QBCore.Players) do
-        local idens = GetPlayerIdentifiers(src)
-        for _, id in pairs(idens) do
-            if identifier == id then
-                return src
-            end
-        end
+    local xPlayer = ESX.GetPlayerFromIdentifier(identifier)
+    if xPlayer then 
+        return xPlayer.source 
     end
     return 0
 end
 
-function QBCore.Functions.GetPlayer(source)
-    if type(source) == 'number' then
-        return QBCore.Players[source]
-    else
-        return QBCore.Players[QBCore.Functions.GetSource(source)]
-    end
-end
+QBCore.Functions.GetPlayer = ESX.GetPlayerFromId
 
-function QBCore.Functions.GetPlayerByCitizenId(citizenid)
-    for src, _ in pairs(QBCore.Players) do
-        if QBCore.Players[src].PlayerData.citizenid == citizenid then
-            return QBCore.Players[src]
-        end
-    end
-    return nil
-end
+
+QBCore.Functions.GetPlayerByCitizenId = ESX.GetPlayerFromIdentifier
 
 function QBCore.Functions.GetPlayerByPhone(number)
-    for src, _ in pairs(QBCore.Players) do
-        if QBCore.Players[src].PlayerData.charinfo.phone == number then
-            return QBCore.Players[src]
-        end
+    for _,xPlayer in pairs(ESX.GetExtendedPlayers()) do 
+        if xPlayer.phone_number and xPlayer.phone_number == number then 
+            return xPlayer
+        end 
     end
     return nil
 end
 
 function QBCore.Functions.GetPlayers()
     local sources = {}
-    for k, v in pairs(QBCore.Players) do
+    for k, v in pairs(ESX.Players) do
         sources[#sources+1] = k
     end
     return sources
@@ -71,17 +47,14 @@ end
 
 -- Will return an array of QB Player class instances
 -- unlike the GetPlayers() wrapper which only returns IDs
-function QBCore.Functions.GetQBPlayers()
-    return QBCore.Players
-end
+QBCore.Functions.GetQBPlayers = ESX.GetExtendedPlayers()
 
 --- Gets a list of all on duty players of a specified job and the number
 function QBCore.Functions.GetPlayersOnDuty(job)
     local players = {}
     local count = 0
-    for src, Player in pairs(QBCore.Players) do
-        if Player.PlayerData.job.name == job then
-            if Player.PlayerData.job.onduty then
+    for src, xPlayer in pairs(ESX.GetExtendedPlayers()) do
+            if xPlayer.job.duty then
                 players[#players + 1] = src
                 count += 1
             end
@@ -93,9 +66,8 @@ end
 -- Returns only the amount of players on duty for the specified job
 function QBCore.Functions.GetDutyCount(job)
     local count = 0
-    for _, Player in pairs(QBCore.Players) do
-        if Player.PlayerData.job.name == job then
-            if Player.PlayerData.job.onduty then
+    for src, xPlayer in pairs(ESX.GetExtendedPlayers("job", job)) do
+            if xPlayer.job.duty then
                 count += 1
             end
         end
@@ -162,64 +134,21 @@ function QBCore.Functions.GetEntitiesInBucket(bucket --[[ int ]])
         return false
     end
 end
-
--- Paychecks (standalone - don't touch)
-
-function PaycheckInterval()
-    if next(QBCore.Players) then
-        for _, Player in pairs(QBCore.Players) do
-            if Player then
-                local payment = Player.PlayerData.job.payment
-                if Player.PlayerData.job and payment > 0 and (QBShared.Jobs[Player.PlayerData.job.name].offDutyPay or Player.PlayerData.job.onduty) then
-                    if QBCore.Config.Money.PayCheckSociety then
-                        local account = exports['qb-management']:GetAccount(Player.PlayerData.job.name)
-                        if account ~= 0 then -- Checks if player is employed by a society
-                            if account < payment then -- Checks if company has enough money to pay society
-                                TriggerClientEvent('QBCore:Notify', Player.PlayerData.source, Lang:t('error.company_too_poor'), 'error')
-                            else
-                                Player.Functions.AddMoney('bank', payment)
-                                exports['qb-management']:RemoveMoney(Player.PlayerData.job.name, payment)
-                                TriggerClientEvent('QBCore:Notify', Player.PlayerData.source, Lang:t('info.received_paycheck', {value = payment}))
-                            end
-                        else
-                            Player.Functions.AddMoney('bank', payment)
-                            TriggerClientEvent('QBCore:Notify', Player.PlayerData.source, Lang:t('info.received_paycheck', {value = payment}))
-                        end
-                    else
-                        Player.Functions.AddMoney('bank', payment)
-                        TriggerClientEvent('QBCore:Notify', Player.PlayerData.source, Lang:t('info.received_paycheck', {value = payment}))
-                    end
-                end
-            end
-        end
-    end
-    SetTimeout(QBCore.Config.Money.PayCheckTimeOut * (60 * 1000), PaycheckInterval)
-end
-
 -- Callbacks
 
-function QBCore.Functions.CreateCallback(name, cb)
-    QBCore.ServerCallbacks[name] = cb
-end
+QBCore.Functions.CreateCallback = ESX.RegisterServerCallback
 
-function QBCore.Functions.TriggerCallback(name, source, cb, ...)
-    if not QBCore.ServerCallbacks[name] then return end
-    QBCore.ServerCallbacks[name](source, cb, ...)
-end
+QBCore.Functions.TriggerCallback = ESX.TriggerServerCallback
 
 -- Items
 
-function QBCore.Functions.CreateUseableItem(item, cb)
-    QBCore.UseableItems[item] = cb
-end
+function QBCore.Functions.CreateUseableItem = ESX.RegisterUsableItem
 
 function QBCore.Functions.CanUseItem(item)
-    return QBCore.UseableItems[item]
+    return ESX.UseableItems[item]
 end
 
-function QBCore.Functions.UseItem(source, item)
-    QBCore.UseableItems[item.name](source, item)
-end
+QBCore.Functions.UseItem = ESX.UseItem
 
 -- Kick Player
 
@@ -256,8 +185,6 @@ end
 -- Check if player is whitelisted, kept like this for backwards compatibility or future plans
 
 function QBCore.Functions.IsWhitelisted(source)
-    if not QBCore.Config.Server.Whitelist then return true end
-    if QBCore.Functions.HasPermission(source, QBCore.Config.Server.WhitelistPermission) then return true end
     return false
 end
 
@@ -265,9 +192,8 @@ end
 
 function QBCore.Functions.AddPermission(source, permission)
     local src = source
-    local license = QBCore.Functions.GetIdentifier(src, 'license')
-    ExecuteCommand(('add_principal identifier.%s qbcore.%s'):format(license, permission))
-    QBCore.Commands.Refresh(src)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    ExecuteCommand(('add_principal identifier.%s esx.%s'):format(xPlayer.identifier, permission))
 end
 
 function QBCore.Functions.RemovePermission(source, permission)
@@ -275,13 +201,13 @@ function QBCore.Functions.RemovePermission(source, permission)
     local license = QBCore.Functions.GetIdentifier(src, 'license')
     if permission then
         if IsPlayerAceAllowed(src, permission) then
-            ExecuteCommand(('remove_principal identifier.%s qbcore.%s'):format(license, permission))
+            ExecuteCommand(('remove_principal identifier.%s esx.%s'):format(license, permission))
             QBCore.Commands.Refresh(src)
         end
     else
         for k,v in pairs(QBCore.Config.Server.Permissions) do
             if IsPlayerAceAllowed(src, v) then
-                ExecuteCommand(('remove_principal identifier.%s qbcore.%s'):format(license, v))
+                ExecuteCommand(('remove_principal identifier.%s esx.%s'):format(license, v))
                 QBCore.Commands.Refresh(src)
             end
         end
@@ -313,15 +239,15 @@ function QBCore.Functions.IsOptin(source)
     local license = QBCore.Functions.GetIdentifier(source, 'license')
     if not license or not QBCore.Functions.HasPermission(source, 'admin') then return false end
     local Player = QBCore.Functions.GetPlayer(source)
-    return Player.PlayerData.optin
+    return Player.optin
 end
 
 function QBCore.Functions.ToggleOptin(source)
     local license = QBCore.Functions.GetIdentifier(source, 'license')
     if not license or not QBCore.Functions.HasPermission(source, 'admin') then return end
-    local Player = QBCore.Functions.GetPlayer(source)
-    Player.PlayerData.optin = not Player.PlayerData.optin
-    Player.Functions.SetMetaData('optin', Player.PlayerData.optin)
+    local tPlayer = QBCore.Functions.GetPlayer(source)
+    xPlayer.optin = not xPlayer.optin
+    xPlayer.set('optin', xPlayer.optin)
 end
 
 -- Check if player is banned
