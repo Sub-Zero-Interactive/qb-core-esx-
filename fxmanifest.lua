@@ -1,11 +1,12 @@
 fx_version 'cerulean'
 game 'gta5'
 
-description 'QB-Core'
-version '1.1.0'
+description 'QBEX-Core'
+version 'the Good one'
 
 shared_scripts {
 	'config.lua',
+	'@es_extended/imports.lua',
     'shared/locale.lua',
 	'locale/en.lua', -- replace with desired language
 	'shared/main.lua',
